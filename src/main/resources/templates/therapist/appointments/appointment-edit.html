@@ -1,8 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<!--/*@thymesVar id="appointment" type="pro.qyoga.core.appointments.core.EditAppointmentRequest"*/-->
+<!--/*@thymesVar id="pageMode" type="java.lang.String"*/-->
 <head>
+
     <div th:replace="~{fragments/header.html}"></div>
-    <title th:text="${appointment?.clientRef?.entity?.fullName() ?: 'Новый приём'}">Новый приём</title>
+    <title th:text="${pageMode == 'CREATE' ? 'Новый приём' : appointment.clientTitle }">Новый приём</title>
 </head>
 <body class="sb-nav-fixed">
 
@@ -16,14 +19,14 @@
         <main>
             <section class="container px-4">
                 <h1 class="mt-4 pb-2 mb-3 border-bottom"
-                    th:text="${appointment?.clientRef?.entity?.fullName() ?: 'Новый приём'}">
+                    th:text="${appointment?.clientTitle ?: 'Новый приём'}">
                     Новый приём
                 </h1>
 
                 <form class="mt-4"
                       hx-push-url="true" hx-swap="outerHTML" hx-target="body"
                       id="editAppointmentForm"
-                      th:attr="hx-post=${pageMode == 'CREATE' ? '/therapist/appointments/new' : null},hx-put=${pageMode == 'EDIT' ? '/therapist/appointments/' + appointment?.id : null}"
+                      th:attr="hx-post=${pageMode == 'CREATE' ? '/therapist/appointments/new' : null},hx-put=${pageMode == 'EDIT' ? '/therapist/appointments/' + appointmentId : null}"
                       th:fragment="editAppointmentForm"
                 >
 
@@ -36,7 +39,7 @@
                                 <combo-box-fragment id="client"
                                                     th:replace="~{components/combo-box.html :: comboBox(
                                                     name='client', fetchUrl='/therapist/clients/autocomplete-search',
-                                                    value=${appointment?.clientRef?.entity?.id}, valueName=${appointment?.clientRef?.entity?.fullName},
+                                                    value=${appointment?.client?.id}, valueName=${appointment?.clientTitle},
                                                     placeholderView=~{:: #clientPlaceholder}, minlength=2, maxlength=100, required=true)}">
                                     <label id="clientPlaceholder">Клиент <span class="text-danger">*</span></label>
                                 </combo-box-fragment>
@@ -48,7 +51,7 @@
                                 <combo-box-fragment id="appointmentType"
                                                     th:replace="~{components/combo-box.html :: comboBox(
                                                     name='appointmentType', fetchUrl='/therapist/appointments/types/autocomplete-search',
-                                                    value=${appointment?.typeRef?.entity?.id}, valueName=${appointment?.typeRef?.entity?.name},
+                                                    value=${appointment?.appointmentType?.id}, valueName=${appointment?.appointmentTypeTitle},
                                                     placeholderView=~{:: #typePlaceholder}, minlength=2, maxlength=50, required=true, selectOnly = false)}">
                                     <label id="typePlaceholder">Тип приёма <span class="text-danger">*</span></label>
                                 </combo-box-fragment>
@@ -60,7 +63,7 @@
                                 <combo-box-fragment id="therapeuticTask"
                                                     th:replace="~{components/combo-box.html :: comboBox(
                                                     name='therapeuticTask', fetchUrl='/therapist/therapeutic-tasks/autocomplete-search-combo-box',
-                                                    value=${appointment?.therapeuticTaskRef?.entity?.id}, valueName=${appointment?.therapeuticTaskRef?.entity?.name},
+                                                    value=${appointment?.therapeuticTask?.id}, valueName=${appointment?.therapeuticTaskTitle},
                                                     placeholderView=~{:: #therapeuticTaskPlaceholder}, minlength=2, maxlength=50)}">
                                     <label id="therapeuticTaskPlaceholder">Терапевтическая задача</label>
                                 </combo-box-fragment>
@@ -76,15 +79,32 @@
                         <div class="row mb-3">
                             <div class="col-12 col-sm-3 mb-3 mb-sm-0">
                                 <div class="form-floating ">
+                                    <!--/*@thymesVar id="appointmentsIntersectionError" type="java.lang.String"*/-->
+                                    <!--/*@thymesVar id="existingAppointment" type="pro.qyoga.core.appointments.core.Appointment"*/-->
                                     <input class="form-control"
                                            id="dateTime"
-                                           max="2100-01-01"
                                            min="2000-01-01"
+                                           max="2100-01-01"
                                            name="dateTime"
                                            required
-                                           th:value="${appointment?.wallClockDateTime}"
+                                           th:classappend="${appointmentsIntersectionError} ? 'is-invalid' : ''"
+                                           th:value="${appointment?.dateTime}"
                                            type="datetime-local">
                                     <label for="dateTime">Дата и время <span class="text-danger">*</span></label>
+                                    <div class="invalid-feedback" id="appointmentsIntersectionErrorMessage">
+                                        Время
+                                        <span th:if="${appointmentsIntersectionError}"
+                                              th:text="${#temporals.format(existingAppointment.wallClockDateTime, T(pro.qyoga.l10n.DateFormatsKt).RUSSIAN_DATE_TIME_PATTERN) +
+                                              ' - ' +
+                                              #temporals.format(existingAppointment.endWallClockDateTime, T(pro.qyoga.l10n.DateFormatsKt).RUSSIAN_TIME_FORMAT_PATTERN)}">
+                                        </span>
+                                        занято.
+                                        <br/>
+                                        Клиент:
+                                        <span th:if="${appointmentsIntersectionError}"
+                                              th:text="${ existingAppointment.clientRef.entity.fullName()}">
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -92,22 +112,41 @@
                                 <combo-box-fragment id="timeZone"
                                                     th:replace="~{components/combo-box.html :: comboBox(
                                                     name='timeZone', fetchUrl='/components/time-zone/autocomplete-search',
-                                                    value=${appointment?.timezone}, valueName=${currentTimeZone?.displayName},
+                                                    value=${appointment?.timeZone}, valueName=${appointment?.timeZoneTitle},
                                                     placeholderView=~{:: #timeZonePlaceholder}, required=true, minlength=2, maxlength=50)}">
                                     <label id="timeZonePlaceholder">Часововй пояс <span
                                             class="text-danger">*</span></label>
                                 </combo-box-fragment>
                                 <script th:inline="javascript">
-                                    let allTimeZones = /*[[${allAvailableTimeZones}]]*/ [];
-                                    let localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                                    let localTimeZoneInfo = allTimeZones.find((tz) => tz.id === localTimeZone);
-                                    let localTimeZoneName = localTimeZoneInfo ? localTimeZoneInfo.title : '';
+                                    (() => {
+                                        // noinspection JSMismatchedCollectionQueryUpdate
+                                        let allTimeZones = /*[[${allAvailableTimeZones}]]*/ [];
 
-                                    document.querySelector("input[name='timeZone']").value = localTimeZone.toString();
-                                    document.querySelector("#timeZoneTitle").value = localTimeZoneName;
+                                        let timeZoneInput = document.querySelector("input[name='timeZone']");
+
+                                        if (timeZoneInput.value === null || timeZoneInput.value === '') {
+                                            let localTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                                            let localTimeZoneInfo = allTimeZones.find((tz) => tz.id === localTimeZone);
+                                            timeZoneInput.value = localTimeZoneInfo.id;
+                                            document.querySelector("#timeZoneTitle").value = localTimeZoneInfo ? localTimeZoneInfo.title : '';
+                                        }
+                                    })();
                                 </script>
                             </div>
-                            <div class="col-12 col-sm-5">
+
+                            <div class="col-12 col-sm-2 mb-3 mb-sm-0">
+                                <div class="form-floating ">
+                                    <input class="form-control"
+                                           id="duration"
+                                           name="duration"
+                                           required
+                                           th:value="${T(pro.azhidkov.platform.java.time.DurationExtKt).toLocalTimeString(appointment?.duration) ?: '01:00'}"
+                                           type="time">
+                                    <label for="duration">Длительность <span class="text-danger">*</span></label>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-sm-4">
                                 <div class="form-floating ">
                                     <input class="form-control"
                                            id="place"
@@ -127,7 +166,7 @@
                     <fieldset class="mb-4">
                         <legend class="border-bottom mb-4">Оплата</legend>
 
-                        <div class="row align-items-center">
+                        <div class="row align-items-center mb-3">
                             <div class="col-8 col-sm-3 ">
                                 <div class="input-group">
                                     <div class="form-floating">
@@ -150,7 +189,8 @@
 
                             <div class="col-3 col-sm-2">
                                 <div class="form-check">
-                                    <input class="form-check-input" id="payed" name="payed" th:checked="${appointment?.payed}"
+                                    <input class="form-check-input" id="payed" name="payed"
+                                           th:checked="${appointment?.payed}"
                                            type="checkbox" value="true">
                                     <label class="form-check-label" for="payed">
                                         Оплачено
@@ -158,6 +198,50 @@
                                 </div>
                             </div>
 
+                        </div>
+                        <div class="row">
+                            <div class="col">
+                                <span class="me-3">Статус приёма: </span>
+                                <div class="form-check form-check-inline mt-2">
+                                    <input class="form-check-input"
+                                           id="appointmentStatusPending"
+                                           name="appointmentStatus"
+
+                                           required
+                                           th:checked="${appointment == null || appointment.appointmentStatus.name == 'PENDING'}"
+                                           type="radio"
+                                           value="PENDING">
+                                    <label class="form-check-label" for="appointmentStatusPending">
+                                        Ожидается клиент
+                                    </label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input"
+                                           id="appointmentStatusClientCame"
+                                           name="appointmentStatus"
+
+                                           required
+                                           th:checked="${appointment?.appointmentStatus?.name == 'CLIENT_CAME'}"
+                                           type="radio"
+                                           value="CLIENT_CAME">
+                                    <label class="form-check-label" for="appointmentStatusClientCame">
+                                        Клиент пришёл
+                                    </label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input"
+                                           id="appointmentStatusClientNotCame"
+                                           name="appointmentStatus"
+
+                                           required
+                                           th:checked="${appointment?.appointmentStatus?.name == 'CLIENT_DO_NOT_CAME'}"
+                                           type="radio"
+                                           value="CLIENT_DO_NOT_CAME">
+                                    <label class="form-check-label" for="appointmentStatusClientNotCame">
+                                        Клиент не пришёл
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </fieldset>
 
@@ -171,6 +255,7 @@
                         <div class="col-6 col-sm-auto text-center">
                             <a class="btn btn-outline-danger" href="/therapist/schedule"
                                onclick="if (!window.confirm('Вы уверены, что хотите отменить все изменения и выйти?')) {event.preventDefault(); return false}"
+                               hx-boost="true"
                                style="min-width: 110px;">
                                 Отмена
                             </a>

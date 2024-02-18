@@ -7,13 +7,15 @@ import io.restassured.module.kotlin.extensions.Then
 import io.restassured.module.kotlin.extensions.When
 import io.restassured.response.Response
 import io.restassured.specification.RequestSpecification
+import org.hamcrest.CoreMatchers.nullValue
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.springframework.http.HttpStatus
-import pro.qyoga.core.appointments.core.dtos.EditAppointmentRequest
-import pro.qyoga.tests.clients.pages.therapist.appointments.CreateAppointmentPage
-import pro.qyoga.tests.clients.pages.therapist.appointments.EditAppointmentPage
-import pro.qyoga.tests.clients.pages.therapist.appointments.SchedulePage
+import pro.azhidkov.platform.java.time.toLocalTimeString
+import pro.qyoga.core.appointments.core.EditAppointmentRequest
+import pro.qyoga.tests.pages.therapist.appointments.CreateAppointmentPage
+import pro.qyoga.tests.pages.therapist.appointments.EditAppointmentPage
+import pro.qyoga.tests.pages.therapist.appointments.SchedulePage
 import java.time.format.DateTimeFormatter
 
 class TherapistAppointmentsApi(override val authCookie: Cookie) : AuthorizedApi {
@@ -80,6 +82,20 @@ class TherapistAppointmentsApi(override val authCookie: Cookie) : AuthorizedApi 
         }
     }
 
+    fun createAppointmentForError(appointment: EditAppointmentRequest): Document {
+        return Given {
+            authorized()
+            fillAppointmentForm(appointment)
+        } When {
+            post(CreateAppointmentPage.path)
+        } Then {
+            statusCode(HttpStatus.OK.value())
+            header("HX-Redirect", nullValue())
+        } Extract {
+            Jsoup.parse(body().asString())
+        }
+    }
+
     fun editAppointment(appointmentId: Long, appointment: EditAppointmentRequest): Response {
         return Given {
             authorized()
@@ -90,8 +106,24 @@ class TherapistAppointmentsApi(override val authCookie: Cookie) : AuthorizedApi 
         }
     }
 
+    fun editAppointmentForError(appointmentId: Long, appointment: EditAppointmentRequest): Document {
+        return Given {
+            authorized()
+            pathParam("appointmentId", appointmentId)
+            fillAppointmentForm(appointment)
+        } When {
+            put(EditAppointmentPage.path)
+        } Then {
+            statusCode(HttpStatus.OK.value())
+            header("HX-Redirect", nullValue())
+        } Extract {
+            Jsoup.parse(body().asString())
+        }
+    }
+
     private fun RequestSpecification.fillAppointmentForm(appointment: EditAppointmentRequest): RequestSpecification {
         formParam(CreateAppointmentPage.editAppointmentForm.clientInput.name, appointment.client.id)
+        formParam(CreateAppointmentPage.editAppointmentForm.clientInput.titleInput.name, appointment.clientTitle)
 
         formParam(CreateAppointmentPage.editAppointmentForm.typeInput.name, appointment.appointmentType?.id ?: "")
         formParam(
@@ -103,6 +135,10 @@ class TherapistAppointmentsApi(override val authCookie: Cookie) : AuthorizedApi 
             CreateAppointmentPage.editAppointmentForm.therapeuticTaskInput.name,
             appointment.therapeuticTask?.id ?: ""
         )
+        formParam(
+            CreateAppointmentPage.editAppointmentForm.therapeuticTaskInput.titleInput.name,
+            appointment.therapeuticTask?.id ?: ""
+        )
 
         formParam(
             CreateAppointmentPage.editAppointmentForm.dateTime.name,
@@ -112,12 +148,21 @@ class TherapistAppointmentsApi(override val authCookie: Cookie) : AuthorizedApi 
             CreateAppointmentPage.editAppointmentForm.timeZone.name,
             appointment.timeZone.id
         )
+        formParam(
+            CreateAppointmentPage.editAppointmentForm.timeZone.titleInput.name,
+            appointment.timeZoneTitle
+        )
+        formParam(
+            CreateAppointmentPage.editAppointmentForm.duration.name,
+            appointment.duration.toLocalTimeString()
+        )
         formParam(CreateAppointmentPage.editAppointmentForm.place.name, appointment.place ?: "")
 
         formParam(CreateAppointmentPage.editAppointmentForm.cost.name, appointment.cost ?: "")
         if (appointment.payed == true) {
             formParam(CreateAppointmentPage.editAppointmentForm.payed.name, "true")
         }
+        formParam(CreateAppointmentPage.editAppointmentForm.statusPending.name, appointment.appointmentStatus.name)
 
         return formParam(CreateAppointmentPage.editAppointmentForm.comment.name, appointment.comment ?: "")
     }
